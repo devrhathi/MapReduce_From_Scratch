@@ -232,8 +232,10 @@ class Worker:
         global PORT, BG_SERVER
         BG_SERVER = True
         PORT = int(sys.argv[1])
+        curr_dir = os.path.dirname(__file__)
+
         #Change Directory to current directory
-        os.chdir(os.path.join(os.path.pardir, 'Worker'))
+        os.chdir(curr_dir)
         self.create_write_folder()
 
 

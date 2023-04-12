@@ -1,0 +1,7 @@
+metadata/
+temp/
+Client/temp/
+Worker/WORKER_*
+Client/__pycache__/
+Master/__pycache__/
+Worker/__pycache__/

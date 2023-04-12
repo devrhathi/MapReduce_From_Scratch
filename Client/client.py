@@ -47,6 +47,9 @@ class Client:
     flags = ['-r', '-w', '-mr']
     PORT = 8000
     IP = "http://127.0.0.1"
+    curr_dir = os.path.dirname(__file__)
+    parent_dir = os.path.dirname(curr_dir)
+
 
     def __init__(self):
         # try:
@@ -85,7 +88,8 @@ class Client:
             info = json.loads(res.content)
             list_of_nodes = info['NUM_OF_WORKERS']
 
-            with open(f"./temp/{filename}_manifest", 'w') as f:
+            file_manifest = os.path.join(self.curr_dir, 'temp', f"{filename}_manifest")
+            with open(file_manifest, 'w') as f:
                 f.write(info['FILE'])
 
             while(worker_replies != len(list_of_nodes)):
@@ -95,17 +99,19 @@ class Client:
 
             #merge the file and print to user
             file_to_merge = os.path.basename(sys.argv[2])
-            merge = Merge('temp', 'temp', file_to_merge)
+            temp_dir = os.path.join(self.curr_dir, 'temp')
+            merge = Merge(temp_dir, temp_dir, file_to_merge)
             merge.manfilename = f"{filename}_manifest"
             merge.merge()
 
             #read file out to stdout
             data = ""
-            with open(f"temp/{file_to_merge}", 'r') as f:
+            file_to_merge_dir = os.path.join(temp_dir, f"{file_to_merge}")
+            with open(file_to_merge_dir, 'r') as f:
                 data = f.readlines()
                 data.sort()
                 data = "".join(data)
-            with open(os.path.join('temp', os.path.basename(sys.argv[2])), 'w') as to_write:
+            with open(os.path.join(temp_dir, os.path.basename(sys.argv[2])), 'w') as to_write:
                 to_write.write(data)
             print(data)
             
@@ -120,7 +126,6 @@ class Client:
             req = requests.get(self.IP + ":3000", params=param)
             list_of_nodes = loads(req.content.decode())
             self.split_and_send(os.path.join(os.getcwd(), sys.argv[2]))
-
         shutil.rmtree('temp')
 
     def mr(self):
@@ -152,34 +157,40 @@ class Client:
         filename = os.path.basename(file_loc).split('.')[0]
         extension = os.path.basename(file_loc).split('.')[1]
 
-        PATH_TO_TEMP = os.path.join(os.getcwd() ,'temp')
+        PATH_TO_TEMP = os.path.join(self.curr_dir ,'temp')
         if(not os.path.exists(PATH_TO_TEMP)):
             os.mkdir(PATH_TO_TEMP)
 
         num_of_nodes = len(list_of_nodes)
         split_lines = 0
+        lines_in_file = 0
+
         with open(file_loc, 'r') as f:
             lines_in_file = len(f.readlines())
             if(num_of_nodes > lines_in_file):
                 split_lines = 1
                 #create remaining blank files
-                for i in range(lines_in_file+1, lines_in_file+(num_of_nodes-lines_in_file)+1):
+                for i in range(lines_in_file+1, num_of_nodes+1):
                     with open(os.path.join(PATH_TO_TEMP, f"{filename}_{i}.{extension}"), 'w') as f:
                         pass
             else:
                 split_lines = math.ceil(lines_in_file/num_of_nodes)
-                #create remaining blank files
-                for i in range(int(lines_in_file/split_lines)+1, num_of_nodes+1):
-                    with open(os.path.join(PATH_TO_TEMP, f"{filename}_{i}.{extension}"), 'w') as f:
-                        pass
 
         split = Split(file_loc, PATH_TO_TEMP)
         split.bylinecount(split_lines)
+
+        # Add remaining files to manifest file
+        if(num_of_nodes>lines_in_file):
+            with open(os.path.join(PATH_TO_TEMP, 'manifest'), 'a') as m:
+                for i in range(lines_in_file+1, num_of_nodes+1):
+                    m.write(f"{filename}_{i}.{extension},0,False\n")
+
 
         #SEND OPERATION
         for i in range(num_of_nodes):
             to_read_from = os.path.join(PATH_TO_TEMP, f"{filename}")
             with open(f"{to_read_from}_{i+1}.{extension}", 'rb') as f:
+                # PARALLELIZE
                 params = {'task' : 'write_file', 'filename':f"{filename}_{i+1}.{extension}"}
                 res = requests.post(f"{self.IP}:{list_of_nodes[i]}", data=f.read(), params=params)
         

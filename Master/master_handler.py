@@ -8,6 +8,10 @@ import threading
 list_of_workers = []
 
 class handler(http.server.BaseHTTPRequestHandler):
+    curr_dir = os.path.dirname(__file__)
+    parent_dir = os.path.dirname(curr_dir)
+
+
     def do_GET(self):
         global list_of_workers
 
@@ -20,7 +24,7 @@ class handler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-type','text/html')
             self.end_headers()
 
-            with open('D:\Dev\Python\Big Data\Project\Master\config.txt') as f:
+            with open(os.path.join(self.curr_dir, 'config.txt')) as f:
                 NUM_OF_WORKERS = int(f.readline().strip().split("=")[1])
                 WORKER_BASE_PORT_NUMBER = int(f.readline().strip().split("=")[1])
 
@@ -44,26 +48,28 @@ class handler(http.server.BaseHTTPRequestHandler):
 
 
             #send manifest to client
-            if(not os.path.exists(f"./metadata/{filename}_manifest") or not os.path.exists(f"./metadata/main_manifest")):
-                print('not existing')
+            file_manifest = os.path.join(self.parent_dir, 'metadata', f"{filename}_manifest")
+            main_manifest = os.path.join(self.parent_dir, 'metadata', f"main_manifest")
+            if(not os.path.exists(file_manifest) or not os.path.exists(main_manifest)):
                 self.send_response(500, message="File Not Found")
                 self.send_header('Content-type','text/html')
                 self.end_headers()
             else:
-                with open(f"./metadata/{filename}_manifest", 'r') as f:
+                with open(file_manifest, 'r') as f:
                     self.send_response(200)
                     self.send_header('Content-type','text/html')
                     self.end_headers()
                 #make a request to send the file to all respective workers, to send file chunk to client
-                with open("./metadata/main_manifest", "rb") as f:
+                with open(main_manifest, "rb") as f:
                     main_manifest_data = None
-                    if(os.path.getsize("./metadata/main_manifest") > 0):
+                    if(os.path.getsize(main_manifest) > 0):
                         main_manifest_data = json.load(f)
                         list_of_ports = main_manifest_data[f"{filename}.{extension}"]
                         req_param = {'task' : 'send_to_client', 'filename' : filename, 'extension' : extension}
                         
                         # print('sending get req to each worker')
                         #send req to worker for sending file chunks to client
+                        # PARALLELIZE
                         for each_port in list_of_ports:
                             try:
                                 requests.get(f"http://localhost:{each_port}", params=req_param, timeout=0.00001)
@@ -72,7 +78,7 @@ class handler(http.server.BaseHTTPRequestHandler):
                                 pass
                     # print('ended get req loop in master')
                     
-                with open(f"./metadata/{filename}_manifest", 'r') as f:
+                with open(file_manifest, 'r') as f:
                     obj_to_send = {
                         'NUM_OF_WORKERS' : list_of_ports,
                         'FILE' : f.read()
